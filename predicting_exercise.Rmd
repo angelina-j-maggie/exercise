@@ -1,0 +1,105 @@
+---
+title: "Predicting the Exercise"
+output: html_document
+---
+
+### Predicting how well exercises were done
+
+#### Summary
+
+The exercises taken by 6 subjects, which were either measurements from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The data was taken from http://groupware.les.inf.puc-rio.br/har, which was taken from devices such as devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit*. It was portioned into a training and a testing data set and was used to predict how well each exercise was done (variable *classe*), using random forest machine learning.
+
+#### Parsing the data set
+
+``` {r loadingdata, cache = TRUE, warning=FALSE, message=FALSE}
+library(caret)
+
+# loading the 2 data sets
+training <- read.csv("pml-training.csv", stringsAsFactors = FALSE)
+testing <- read.csv("pml-testing.csv", stringsAsFactors = FALSE)
+table(training$classe)
+names(training) <- gsub("picth", "pitch", names(training)) # rename a typo
+list <- c(12:17, 20, 23, 26, 69:74, 87:92, 95, 98, 101, 125:130, 133, 136, 139)
+for (i in list) training[,i] <- as.numeric(training[,i]) # ensure all variables are numeric
+for (i in list) testing[,i] <- as.numeric(testing[,i]) # ensure all variables are numeric
+
+# keep only well populated rows
+x <- list()
+for (i in 1:ncol(training)) x[i] <- sum(is.na(training[,i]))
+training_sub <- training[,c(1:11, 37:49, 60:68, 84:86, 102, 113:124, 140, 151:160)]
+testing_sub <- testing[,c(1:11, 37:49, 60:68, 84:86, 102, 113:124, 140, 151:160)]
+
+# get my own training and testing sets
+inTrain = createDataPartition(training_sub$classe, p = 0.6)[[1]]
+my_training <- training_sub[inTrain,]
+my_testing <- training_sub[-inTrain,]
+
+# test for linear combinations
+comboInfo <- findLinearCombos(my_training[,8:59])
+comboInfo # this shows there are no linear combinations of variables.
+```
+
+#### Results
+
+Five different machine learning techniques were compared to determine which was the most accurate, using the *my_training* and *my_testing* datasets. The most accurate was then used to predict the *classe* in the given testing set.
+
+``` {r buildmodel, cache = TRUE, results="hide"}
+library(caret)
+set.seed(325)
+# lda
+ldaFit1 <- train(classe ~ ., data = my_training[,8:60], method = "lda")
+
+# random forest
+rfFit1 <- train(classe ~ ., data = my_training[,8:60], method = "rf")
+
+# SVM
+svmFit1 <- train(classe ~ ., data = my_training[,8:60], method = "svmRadial")
+
+# GBM
+gbmFit1 <- train(classe ~ ., data = my_training[,8:60], method = "gbm")
+```
+
+``` {r summ, cache = TRUE}
+library(caret)
+# lda
+predlda <- predict(ldaFit1, newdata = my_testing[,c(8:59)])
+confusionMatrix(predlda, my_testing$classe)
+
+# random forest
+predrf <- predict(rfFit1, newdata = my_testing[,c(8:59)])
+confusionMatrix(predrf, my_testing$classe)
+
+# SVM
+predsvm <- predict(svmFit1, newdata = my_testing[,c(8:59)])
+confusionMatrix(predsvm, my_testing$classe)
+
+# GBM
+predgbm <- predict(gbmFit1, newdata = my_testing[,c(8:59)])
+confusionMatrix(predgbm, my_testing$classe)
+
+# comparing performance
+resamps <- resamples(list(LDA = ldaFit1,
+                          RF = rfFit1,
+                          GBM = gbmFit1,
+                          SVM = svmFit1))
+resamps
+summary(resamps)
+
+difValues <- diff(resamps)
+difValues
+summary(difValues)
+trellis.par.set(caretTheme())
+dotplot(difValues)
+```
+
+
+#### Conclusions
+
+The most accurate technique was random forest, which gave the following results in the provided testing set.
+
+``` {r test, cache = TRUE}
+# testing using random forest model
+pred <- predict(rfFit1, newdata = testing_sub[,c(8:59)])
+preda <- as.data.frame(rbind(testing_sub$problem_id, as.character(pred)))
+preda
+```
