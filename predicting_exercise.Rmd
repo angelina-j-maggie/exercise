@@ -1,6 +1,6 @@
 ---
 title: "Predicting the Exercise"
-output: html_document
+output: pdf_document
 ---
 
 ### Predicting how well exercises were done
@@ -10,6 +10,8 @@ output: html_document
 The exercises taken by 6 subjects, which were either measurements from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The data was taken from http://groupware.les.inf.puc-rio.br/har, which was taken from devices such as devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit*. It was portioned into a training and a testing data set and was used to predict how well each exercise was done (variable *classe*), using random forest machine learning.
 
 #### Parsing the data set
+
+When conducitng exploratory analysis, it was shown that many of the variables were not well populated and so only the sixty in the subset *training_sub* and *testing_sub* were used. 
 
 ``` {r loadingdata, cache = TRUE, warning=FALSE, message=FALSE}
 library(caret)
@@ -41,7 +43,7 @@ comboInfo # this shows there are no linear combinations of variables.
 
 #### Results
 
-Five different machine learning techniques were compared to determine which was the most accurate, using the *my_training* and *my_testing* datasets. The most accurate was then used to predict the *classe* in the given testing set.
+Four different machine learning techniques were compared to determine which was the most accurate, using the *my_training* and *my_testing* datasets. The most accurate was then used to predict the *classe* in the given testing set. The first is linear discriminant analysis (LDA) which provides a linear combination of variable effects, much like generalised linear regression, to explain the prediction varialbe. Random forest (RF) is an ensemble learning technique for classification (in this case for predicting *classe*), by constructing multiple decision trees to predict the classifications. The third technique is support vector machine (SVM) learning, which is a supervised learning technique meaning that it assigns new examples based on previously learnt classifications. NOtably it isn't probabilistic. The final technique is generalised boosting methods (GBM), which is a probabilistic method that produces a prediction model in a stepwise method.
 
 ``` {r buildmodel, cache = TRUE, results="hide"}
 library(caret)
@@ -58,6 +60,8 @@ svmFit1 <- train(classe ~ ., data = my_training[,8:60], method = "svmRadial")
 # GBM
 gbmFit1 <- train(classe ~ ., data = my_training[,8:60], method = "gbm")
 ```
+
+After computation, the 4 methods were compared below to determine their accuracy. The confusion matrices show that the most accurate technique was random forest.
 
 ``` {r summ, cache = TRUE}
 library(caret)
@@ -92,10 +96,32 @@ trellis.par.set(caretTheme())
 dotplot(difValues)
 ```
 
+In addition, the recievor operated curve (ROC) was computed for the random forest model below. This gives a cross-validation that the random forest has both good specificity and sensitivity. The plots for variables A, B, C of *classe* give an AUC of 1 (not shown), with D and E still giving high values, implying adequate sensitivity.
+
+``` {r roc, cache = TRUE}
+ctrl <- trainControl(method="cv", 
+                     summaryFunction=defaultSummary, 
+                     classProbs=T,
+                     savePredictions = T)
+rfFit <- train(classe ~ ., data=training_sub, 
+               method="rf", preProc=c("center", "scale"), 
+               trControl=ctrl)
+library(pROC)
+# Select a parameter setting
+selectedIndices <- rfFit$pred$mtry == 2
+# Plot:
+plot.roc(rfFit$pred$obs[selectedIndices],
+         rfFit$pred$D[selectedIndices])
+
+plot.roc(rfFit$pred$obs[selectedIndices],
+         rfFit$pred$E[selectedIndices])
+
+
+```
 
 #### Conclusions
 
-The most accurate technique was random forest, which gave the following results in the provided testing set.
+The most accurate technique was random forest, which gave the following results in the provided testing set. It had an accuracy of 99%, whereas the other techniques were: 70% for LDA, 96% for GBM and 92% for SVM. 
 
 ``` {r test, cache = TRUE}
 # testing using random forest model
